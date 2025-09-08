@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dijkstra Visualizer — 5 Problems</title>
+  <style>
+    :root{
+      --bg:#0b1220; --card:#071126; --panel:#0f1724; --muted:#9aa8bf;
+      --node-default:#ffffff; /* white */
+      --node-discovered:#ffcc00; /* yellow */
+      --node-visited:#00b050; /* green */
+      --node-stroke:#333333;
+      --edge:#9aa6b3;
+      --accent:#06b6d4;
+      --glass: rgba(255,255,255,0.03);
+      --glass-2: rgba(255,255,255,0.02);
+      --text:#e6eef6;
+      --card-radius:12px;
+      font-sans: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#051025 0%, #071225 100%);color:var(--text);font-family:var(--font-sans);-webkit-font-smoothing:antialiased}
+    .wrap{display:flex;gap:18px;padding:18px;height:100vh;box-sizing:border-box}
+    .left{flex:1;display:flex;flex-direction:column;gap:12px}
+    .panel{background:linear-gradient(180deg,var(--glass),var(--glass-2));border-radius:var(--card-radius);padding:12px;box-shadow:0 8px 30px rgba(2,6,23,0.6)}
+    .canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:480px}
+    svg{width:100%;height:100%;display:block;border-radius:10px;background:linear-gradient(180deg,#061025 0%, #071025 100%)}
+    .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    button{background:linear-gradient(90deg,#075985,#06b6d4);border:0;padding:8px 12px;border-radius:8px;color:white;cursor:pointer;font-weight:600}
+    button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);font-weight:600}
+    .small{font-size:13px;color:var(--muted)}
+    .right{width:360px;display:flex;flex-direction:column;gap:12px}
+    .tables{display:flex;gap:10px}
+    .table-card{flex:1;padding:8px;background:rgba(255,255,255,0.02);border-radius:10px;min-height:220px;overflow:auto}
+    .table-card h4{margin:6px 0 8px 0;font-size:13px;color:var(--muted)}
+    table{width:100%;border-collapse:collapse;font-family:monospace;color:var(--text)}
+    th,td{padding:6px 8px;border-bottom:1px dashed rgba(255,255,255,0.03);text-align:left;font-size:13px}
+    th{color:var(--muted);font-weight:700}
+    .legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .legend .item{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+    .dot{width:14px;height:14px;border-radius:50%;display:inline-block}
+    footer{opacity:0.8;color:var(--muted);font-size:13px;margin-top:auto;text-align:center}
+    @media (max-width:1000px){.wrap{flex-direction:column}.right{width:100%}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="left">
+      <div class="panel controls">
+        <div class="small">Problem:</div>
+        <button id="prevProb" class="secondary">⬅ Prev</button>
+        <div id="probLabel" class="small" style="min-width:140px;text-align:center">Problem 1 / 5</div>
+        <button id="nextProb" class="secondary">Next ➡</button>
+
+        <div style="width:12px"></div>
+
+        <button id="runBtn">▶ Run Dijkstra</button>
+        <button id="pauseBtn" class="secondary">⏸ Pause</button>
+
+        <div style="width:12px"></div>
+        <label class="small">Speed (ms)</label>
+        <input id="speed" type="range" min="3000" max="10000" step="500" value="5000" />
+        <div id="speedVal" class="small">5000</div>
+      </div>
+
+      <div class="panel canvas-wrap">
+        <!-- SVG for graph -->
+        <svg id="svgCanvas" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid meet">
+          <!-- arrowhead marker -->
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L10,5 L0,10 z" fill="#ff6b6b"></path>
+            </marker>
+            <marker id="pathArrow" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L10,5 L0,10 z" fill="#ff8c42"></path>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="panel table-card">
+        <h4>Distances & Previous</h4>
+        <div id="distTableWrap"></div>
+      </div>
+
+      <div class="panel table-card">
+        <h4>Final Shortest Paths</h4>
+        <div id="finalTableWrap"></div>
+      </div>
+
+      <div class="panel">
+        <h4>Legend</h4>
+        <div class="legend">
+          <div class="item"><span class="dot" style="background:var(--node-default);border:1px solid var(--node-stroke)"></span> Default</div>
+          <div class="item"><span class="dot" style="background:var(--node-discovered)"></span> Discovered</div>
+          <div class="item"><span class="dot" style="background:var(--node-visited)"></span> Visited</div>
+          <div class="item"><span class="dot" style="background:#ff6b6b"></span> Final path edges</div>
+        </div>
+      </div>
+
+      <footer class="panel small">Click Run, then Pause to inspect. Use Prev/Next to switch problems. Min speed = 3000ms (3s) per step.</footer>
+    </div>
+  </div>
+
+  <script>
+    /*************************************************************************
+     * Data: same 5 problems as your Python version (positions & adj lists)
+     *************************************************************************/
+    const W = 900, H = 600;
+    const PROBLEMS = [
+      {
+        adj: {
+          A: {B:2, C:4},
+          B: {A:2, D:7, E:3},
+          C: {A:4, F:5},
+          D: {B:7},
+          E: {B:3, F:1},
+          F: {C:5, E:1}
+        },
+        pos: {
+          A: [W/2, 80], B: [W/2 - 160, 200], C: [W/2 + 160, 200],
+          D: [W/2 - 200, 350], E: [W/2, 350], F: [W/2 + 200, 350]
+        }
+      },
+      {
+        adj: {
+          A:{B:1, C:5},
+          B:{A:1, C:2, D:4},
+          C:{A:5, B:2, E:3},
+          D:{B:4, E:1},
+          E:{C:3, D:1}
+        },
+        pos: {
+          A:[W/2,100], B:[W/2 - 180,220], C:[W/2 + 180,220],
+          D:[W/2 - 100,380], E:[W/2 + 100,380]
+        }
+      },
+      {
+        adj: {
+          S:{A:2, B:1},
+          A:{S:2, C:3},
+          B:{S:1, C:1, D:4},
+          C:{A:3, B:1, E:6},
+          D:{B:4, E:2},
+          E:{C:6, D:2}
+        },
+        pos: {
+          S:[W/2,80], A:[W/2 - 200,200], B:[W/2 + 200,200],
+          C:[W/2,220], D:[W/2 - 120,380], E:[W/2 + 120,380]
+        }
+      },
+      {
+        adj: {
+          P:{Q:4, R:2},
+          Q:{P:4, R:5, S:10},
+          R:{P:2, Q:5, T:3},
+          S:{Q:10, T:6},
+          T:{R:3, S:6}
+        },
+        pos: {
+          P:[W/2 - 200,150], Q:[W/2 + 200,150], R:[W/2,200],
+          S:[W/2 - 120,380], T:[W/2 + 120,380]
+        }
+      },
+      {
+        adj: {
+          A:{B:3, C:1},
+          B:{A:3, C:7, D:5},
+          C:{A:1, B:7, E:2},
+          D:{B:5, E:7},
+          E:{C:2, D:7}
+        },
+        pos: {
+          A:[W/2,80], B:[W/2 - 200,200], C:[W/2 + 200,200],
+          D:[W/2 - 120,380], E:[W/2 + 120,380]
+        }
+      }
+    ];
+
+    /*************************************************************************
+     * DOM refs & state
+     *************************************************************************/
+    const svg = document.getElementById('svgCanvas');
+    const runBtn = document.getElementById('runBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const prevProbBtn = document.getElementById('prevProb');
+    const nextProbBtn = document.getElementById('nextProb');
+    const probLabel = document.getElementById('probLabel');
+    const speedRange = document.getElementById('speed');
+    const speedVal = document.getElementById('speedVal');
+    const distTableWrap = document.getElementById('distTableWrap');
+    const finalTableWrap = document.getElementById('finalTableWrap');
+
+    let problemIndex = 0;
+    let adj = null, positions = null;
+    let nodeElems = {};    // map node -> <g> element
+    let edgeElems = [];    // list of {u,v,line,text,idx}
+    const NODE_R = 25;
+
+    // Dijkstra runtime state
+    let gen = null;
+    let timer = null;
+    let paused = false;
+    let lastState = null;
+
+    /*************************************************************************
+     * Utility: Priority queue (min-heap)
+     *************************************************************************/
+    class MinPQ {
+      constructor(){ this.data = [] }
+      push(item, priority){ this.data.push({item, p:priority}); this._bubbleUp(this.data.length-1) }
+      pop(){
+        if(this.data.length===0) return null;
+        const top = this.data[0];
+        const last = this.data.pop();
+        if(this.data.length>0){ this.data[0] = last; this._sinkDown(0); }
+        return top.item;
+      }
+      _bubbleUp(n){
+        while(n>0){
+          const p = Math.floor((n-1)/2);
+          if(this.data[n].p >= this.data[p].p) break;
+          [this.data[n], this.data[p]] = [this.data[p], this.data[n]];
+          n = p;
+        }
+      }
+      _sinkDown(n){
+        const len = this.data.length;
+        while(true){
+          let left = 2*n+1, right = 2*n+2, smallest = n;
+          if(left < len && this.data[left].p < this.data[smallest].p) smallest = left;
+          if(right < len && this.data[right].p < this.data[smallest].p) smallest = right;
+          if(smallest===n) break;
+          [this.data[n], this.data[smallest]] = [this.data[smallest], this.data[n]];
+          n = smallest;
+        }
+      }
+      isEmpty(){ return this.data.length===0 }
+    }
+
+    /*************************************************************************
+     * Dijkstra generator (stepwise) -> yields actions similar to your Python
+     *************************************************************************/
+    function* dijkstraGen(adjObj, start){
+      // copy keys
+      const nodes = Object.keys(adjObj);
+      const dist = {}; const prev = {};
+      for(const u of nodes){ dist[u] = Infinity; prev[u] = null; }
+      dist[start] = 0;
+      const pq = new MinPQ();
+      pq.push(start, 0);
+      const visited = new Set();
+
+      while(!pq.isEmpty()){
+        const u = pq.pop();
+        if(visited.has(u)) continue;
+        yield ['visit', u, {...dist}, {...prev}];
+        visited.add(u);
+
+        for(const [v, w] of Object.entries(adjObj[u])){
+          if(visited.has(v)) continue;
+          if(dist[u] + w < dist[v]){
+            dist[v] = dist[u] + w;
+            prev[v] = u;
+            yield ['relax', u, v, {...dist}, {...prev}];
+            pq.push(v, dist[v]);
+          } else {
+            // we can still show 'consider' for clarity (not required)
+            yield ['consider', u, v, w, {...dist}, {...prev}];
+          }
+        }
+      }
+      yield ['done', {...dist}, {...prev}];
+    }
+
+    /*************************************************************************
+     * Rendering helpers (SVG)
+     *************************************************************************/
+    function clearSvg(){
+      while(svg.lastChild) svg.removeChild(svg.lastChild);
+      // add defs for markers again
+      const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
+      defs.innerHTML = `
+        <marker id="arrow" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L10,5 L0,10 z" fill="#ff6b6b"></path>
+        </marker>
+        <marker id="pathArrow" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L10,5 L0,10 z" fill="#ff8c42"></path>
+        </marker>`;
+      svg.appendChild(defs);
+    }
+
+    function renderGraph(){
+      clearSvg();
+      nodeElems = {}; edgeElems = [];
+      // draw edges (undirected; ensure each edge only once)
+      const seen = new Set();
+      for(const u of Object.keys(adj)){
+        const [x1,y1] = positions[u];
+        for(const [v, w] of Object.entries(adj[u])){
+          const key = [u,v].sort().join('|');
+          if(seen.has(key)) continue;
+          seen.add(key);
+          const [x2,y2] = positions[v];
+          const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+          line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+          line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+          line.setAttribute('stroke', 'var(--edge)'); line.setAttribute('stroke-width', '2');
+          svg.appendChild(line);
+
+          // weight label
+          const tx = (x1+x2)/2, ty=(y1+y2)/2;
+          const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+          t.setAttribute('x', tx); t.setAttribute('y', ty - 8);
+          t.setAttribute('fill', 'var(--muted)');
+          t.setAttribute('font-size','13'); t.setAttribute('text-anchor','middle');
+          t.textContent = w;
+          svg.appendChild(t);
+
+          edgeElems.push({u,v,line,text:t});
+        }
+      }
+
+      // nodes on top
+      for(const u of Object.keys(adj)){
+        const [x,y] = positions[u];
+        const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+        g.setAttribute('transform', `translate(${x},${y})`);
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+        circle.setAttribute('r', NODE_R);
+        circle.setAttribute('fill', 'var(--node-default)');
+        circle.setAttribute('stroke', 'var(--node-stroke)');
+        circle.setAttribute('stroke-width','2');
+        circle.style.transition = 'fill .25s, transform .18s';
+        // attach click to set target & show final path if available
+        circle.addEventListener('click', ()=> onNodeClick(u));
+
+        const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+        label.setAttribute('y', '6'); label.setAttribute('text-anchor','middle');
+        label.setAttribute('font-size','14'); label.setAttribute('fill','black');
+        label.textContent = u;
+
+        // store
+        g.appendChild(circle); g.appendChild(label);
+        svg.appendChild(g);
+        nodeElems[u] = {g, circle, label};
+      }
+    }
+
+    /*************************************************************************
+     * UI helpers: tables & color & path drawing
+     *************************************************************************/
+    function updateTable(dist, prev){
+      // distances & prev (live)
+      const keys = Object.keys(dist).sort();
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      thead.innerHTML = '<tr><th>Node</th><th>Dist</th><th>Prev</th></tr>';
+      table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      for(const u of keys){
+        const tr = document.createElement('tr');
+        const dval = (dist[u] === Infinity) ? '∞' : dist[u];
+        const pval = prev[u] === null ? '-' : prev[u];
+        tr.innerHTML = `<td>${u}</td><td>${dval}</td><td>${pval}</td>`;
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      distTableWrap.innerHTML = ''; distTableWrap.appendChild(table);
+    }
+
+    function updateFinalTable(dist, prev){
+      const keys = Object.keys(dist).sort();
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      thead.innerHTML = '<tr><th>Node</th><th>Dist</th><th>Prev</th></tr>';
+      table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      for(const u of keys){
+        const tr = document.createElement('tr');
+        const dval = (dist[u] === Infinity) ? '∞' : dist[u];
+        const pval = prev[u] === null ? '-' : prev[u];
+        tr.innerHTML = `<td>${u}</td><td>${dval}</td><td>${pval}</td>`;
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      finalTableWrap.innerHTML = ''; finalTableWrap.appendChild(table);
+    }
+
+    function setNodeColor(u, colorName){
+      const el = nodeElems[u];
+      if(!el) return;
+      el.circle.setAttribute('fill', colorName);
+    }
+
+    function resetNodeColors(){
+      for(const u of Object.keys(adj)){
+        setNodeColor(u, getComputedStyle(document.documentElement).getPropertyValue('--node-default') || '#ffffff');
+      }
+    }
+
+    function drawShortestTree(prev){
+      // remove existing path lines marked with data-path
+      const old = svg.querySelectorAll('[data-path="true"]');
+      old.forEach(n=>n.remove());
+      for(const v of Object.keys(prev)){
+        const u = prev[v];
+        if(u){
+          const [x1,y1] = positions[u], [x2,y2] = positions[v];
+          const path = document.createElementNS('http://www.w3.org/2000/svg','line');
+          path.setAttribute('x1', x1); path.setAttribute('y1', y1);
+          path.setAttribute('x2', x2); path.setAttribute('y2', y2);
+          path.setAttribute('stroke', '#ff8c42'); path.setAttribute('stroke-width', 4);
+          path.setAttribute('marker-end', 'url(#pathArrow)');
+          path.setAttribute('data-path', 'true');
+          svg.appendChild(path);
+        }
+      }
+    }
+
+    /*************************************************************************
+     * Interactions & orchestration
+     *************************************************************************/
+    function loadProblem(i){
+      problemIndex = i;
+      const prob = PROBLEMS[problemIndex];
+      adj = prob.adj;
+      positions = prob.pos;
+      probLabel.textContent = `Problem ${problemIndex+1} / ${PROBLEMS.length}`;
+      gen = null; lastState = null; paused = false; clearTimer();
+      renderGraph();
+      resetNodeColors();
+      updateTable({}, {});
+      finalTableWrap.innerHTML = '';
+    }
+
+    function clearTimer(){ if(timer){ clearTimeout(timer); timer = null; } }
+
+    function onNodeClick(node){
+      // If we have lastState with prev, animate path to this node
+      if(!lastState || !lastState.prev) {
+        // mark as selected target visually briefly
+        flashNode(node, '#ff6b6b', 600);
+        return;
+      }
+      const prev = lastState.prev;
+      // build path
+      let cur = node, path = [];
+      while(cur){
+        path.unshift(cur);
+        cur = prev[cur];
+      }
+      if(path.length === 0) return;
+      animatePath(path);
+    }
+
+    function flashNode(node, color, ms=800){
+      const orig = nodeElems[node].circle.getAttribute('fill');
+      setNodeColor(node, color);
+      setTimeout(()=> setNodeColor(node, orig), ms);
+    }
+
+    function animatePath(path){
+      // remove existing shown path lines temporarily
+      const existing = svg.querySelectorAll('[data-anim-path="true"]');
+      existing.forEach(e=>e.remove());
+
+      // animate step by step
+      let i = 0;
+      const stepMS = Math.max(200, parseInt(speedRange.value));
+      function stepAnim(){
+        if(i >= path.length) return;
+        const u = path[i];
+        // color node as final-orange
+        setNodeColor(u, '#ff8c42'); // final color (orange)
+        if(i>0){
+          const a = path[i-1], b = path[i];
+          // draw short highlighted line on top
+          const [x1,y1] = positions[a], [x2,y2] = positions[b];
+          const l = document.createElementNS('http://www.w3.org/2000/svg','line');
+          l.setAttribute('x1', x1); l.setAttribute('y1', y1);
+          l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+          l.setAttribute('stroke', '#ff8c42'); l.setAttribute('stroke-width', 6);
+          l.setAttribute('marker-end', 'url(#pathArrow)');
+          l.setAttribute('data-anim-path','true');
+          svg.appendChild(l);
+        }
+        i++;
+        if(i < path.length) setTimeout(stepAnim, stepMS);
+      }
+      stepAnim();
+    }
+
+    /*************************************************************************
+     * Runner: stepping through generator with chosen delay (speedRange)
+     *************************************************************************/
+    function runDijkstra(){
+      // start from first key (like your Python version)
+      clearTimer();
+      const start = Object.keys(adj)[0];
+      gen = dijkstraGen(adj, start);
+      resetNodeColors();
+      // mark start
+      setNodeColor(start, getComputedStyle(document.documentElement).getPropertyValue('--node-visited').trim() || '#00b050');
+      scheduleNext();
+    }
+
+    function scheduleNext(){
+      if(!gen) return;
+      if(paused) { timer = setTimeout(scheduleNext, 200); return; }
+      const {value, done} = gen.next();
+      if(done){ gen = null; return; }
+      if(!value){ timer = setTimeout(scheduleNext, parseInt(speedRange.value)); return; }
+      const action = value[0];
+      lastState = (()=> {
+        // store a normalized state object with dist & prev if present
+        if(action === 'visit') return {type:'visit', node:value[1], dist:value[2], prev:value[3]||{}};
+        if(action === 'relax') return {type:'relax', u:value[1], v:value[2], dist:value[3], prev:value[4]};
+        if(action === 'consider') return {type:'consider', u:value[1], v:value[2], w:value[3], dist:value[4], prev:value[5]};
+        if(action === 'done') return {type:'done', dist:value[1], prev:value[2]};
+        return null;
+      })();
+
+      // handle UI updates
+      if(action === 'visit'){
+        const node = value[1];
+        // mark current visited (green)
+        setNodeColor(node, getComputedStyle(document.documentElement).getPropertyValue('--node-visited').trim() || '#00b050');
+        updateTable(value[2], value[3] || {});
+      } else if(action === 'relax'){
+        const u = value[1], v = value[2];
+        // discovered color (yellow) for v
+        setNodeColor(v, getComputedStyle(document.documentElement).getPropertyValue('--node-discovered').trim() || '#ffcc00');
+        updateTable(value[3], value[4] || {});
+      } else if(action === 'consider'){
+        // subtle highlight could be added; we update table only
+        updateTable(value[4], value[5] || {});
+      } else if(action === 'done'){
+        updateFinalTable(value[1], value[2]);
+        drawShortestTree(value[2]);
+      }
+
+      timer = setTimeout(scheduleNext, Math.max(3000, parseInt(speedRange.value)));
+    }
+
+    /*************************************************************************
+     * UI wiring
+     *************************************************************************/
+    runBtn.addEventListener('click', ()=>{
+      // start fresh run
+      runDijkstra();
+      paused = false;
+      pauseBtn.textContent = '⏸ Pause';
+    });
+
+    pauseBtn.addEventListener('click', ()=>{
+      paused = !paused;
+      pauseBtn.textContent = paused ? '▶ Resume' : '⏸ Pause';
+    });
+
+    prevProbBtn.addEventListener('click', ()=>{
+      problemIndex = (problemIndex - 1 + PROBLEMS.length) % PROBLEMS.length;
+      loadProblem(problemIndex);
+    });
+
+    nextProbBtn.addEventListener('click', ()=>{
+      problemIndex = (problemIndex + 1) % PROBLEMS.length;
+      loadProblem(problemIndex);
+    });
+
+    speedRange.addEventListener('input', ()=> {
+      speedVal.textContent = speedRange.value;
+      // do not change in-run timer immediately; next step will use updated value
+    });
+
+    /*************************************************************************
+     * Init
+     *************************************************************************/
+    function init(){
+      // set CSS var fallback colors on :root so JS read works consistently
+      document.documentElement.style.setProperty('--node-default', '#ffffff');
+      document.documentElement.style.setProperty('--node-discovered', '#ffcc00');
+      document.documentElement.style.setProperty('--node-visited', '#00b050');
+      // initial load
+      loadProblem(0);
+      speedVal.textContent = speedRange.value;
+    }
+
+    init();
+  </script>
+</body>
+</html>
